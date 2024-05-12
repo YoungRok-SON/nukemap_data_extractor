@@ -18,6 +18,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import NoSuchElementException
+
 
 import numpy as np
 import time
@@ -212,51 +214,131 @@ for height in range(0, 3001, 100):
 
         
 
-        
+        # Test Code
+
+        # 페이지에서 모든 'effectCaption' 클래스를 가진 요소를 찾습니다.
         elements = driver.find_elements(By.CLASS_NAME, 'effectCaption')
         
-        # radius 값들을 추출합니다.
-        radius_values = [element.get_attribute('radius') for element in elements]
-        print(radius_values)
-        data_by_height[height].append((kt, radius_values))
+        # 결과를 저장할 딕셔너리를 준비합니다.
+        radius_data = {}
+        
+        # 각 요소에 대하여 내부 HTML을 검사합니다.
+        for element in elements:
+            # 제목을 찾습니다 (예: 'Crater Inside Radius:')
+            title_element = element.find_element(By.XPATH, ".//span[@class='effectTitle']")
+            # 제목 옆에 있는 radius 속성 값을 가진 span을 찾습니다.
+            # "radius" 속성을 포함하는 span 요소가 있는지 확인합니다.
+            try:
+                value = element.get_attribute('radius')
+                title = title_element.text.strip(':')
+                print(title)
+                print(value)
+                # value = value_element.get_attribute('radius')  # 'radius' 속성의 값을 가져옵니다.
+        
+                # 제목과 값이 제대로 추출될 경우 딕셔너리에 저장
+                if title and value:
+                    radius_data[title] = value
+            except NoSuchElementException:
+                # 'radius' 속성을 찾지 못할 경우 이 예외 처리
+                print(f"Radius value for '{title_element.text}' not found.")
+        
+        # radius_data에 저장된 데이터를 확인
+        print(radius_data)
+        data_by_height[height].append((kt, radius_data))
+
+        # - - - - -- -- -- -
+        
+        
+        
+        
+        # elements = driver.find_elements(By.CLASS_NAME, 'effectCaption')        
+        # elements_names = driver.find_elements(By.CLASS_NAME, 'effectTitle')
+        # # radius 값들을 추출합니다.
+        # radius_values = [element.get_attribute('radius') for element in elements]
+        # radius_name   = [element_name.get_attribute('effectTitle') for element_name in elements_names]
+        # print(radius_values)
+        # data_by_height[height].append((kt, radius_values))
         
                 
 
 # Quit the connection
 driver.quit()
 
+
+
 import pandas as pd
+
+# 가능한 모든 키들의 리스트 생성 (컬럼 헤더로 사용될 것)
+all_keys = ['Crater inside radius',
+            'Crater lip radius',
+            'Air blast radius (3,000 psi)',
+            'Air blast radius (200 psi)',
+            'Fireball radius',
+            'Heavy blast damage radius (20 psi)',
+            'Thermal radiation radius (35 cal/cm²)',
+            'Radiation radius (5,000 rem)',
+            'Moderate blast damage radius (5 psi)',
+            'Radiation radius (1,000 rem)',
+            'Thermal radiation radius (3rd degree burns)',
+            'Radiation radius (600 rem)',
+            'Radiation radius (500 rem)',
+            'Thermal radiation radius (3rd degree burns (50%))',
+            'Thermal radiation radius (2nd degree burns (50%))',
+            'Radiation radius (100 rem)',
+            'Light blast damage radius (1 psi)',
+            'Thermal radiation radius (1st degree burns (50%))',
+            'Thermal radiation radius (no harm)']
 
 # Excel 파일 생성을 위한 writer 준비
 with pd.ExcelWriter('output_data(air).xlsx', engine='openpyxl') as writer:
     for height, data in data_by_height.items():
         # 각 고도별로 데이터 처리 및 데이터프레임 생성
         processed_data = []
-        for kt, radius_values in data:
-            # 두 번째 원소가 None이면 제거
-            if radius_values[1] is None:
-                del radius_values[1]
-            # 데이터 길이가 19개가 아니면 조정 (예를 들어, 다른 위치에도 None 값이 있을 경우)
-            if len(radius_values) > 19:
-                radius_values = radius_values[:19]
-            processed_data.append([kt] + radius_values)
+        for kt, radius_dict in data:
+            # 딕셔너리의 키에 따라 값을 정렬하고, 없는 값은 0으로 채웁니다.
+            row = [kt] + [float(radius_dict.get(key, 0)) for key in all_keys]
+            processed_data.append(row)
         
         # 처리된 데이터로 DataFrame 생성
-        df = pd.DataFrame(processed_data, columns=['kt'] + ['Crater Inside', 'Crater Lip', 'Air Blast 3000psi', 'Air Blast 200psi', 'Fireball', 'Heavy Blast 20psi', 'Radiation 5000rem', 'Radiation 1000rem', 'Radiation 600rem', 'Radiation 500rem', 'Radiation 100rem', 'Moderate Blast 5psi', 'Thermal Radiation 35cal/cm^2', 'Thermal Radiation 3rd degree burns', 'Thermal Radiation 3rd degree burns(50%)', 'Light Blast 1psi', 'Thermal Radiation 2nd degree burns', 'Thermal Radiation 1st degree burns(50%)', 'Thermal Radiation no harm'])
+        df = pd.DataFrame(processed_data, columns=['kt'] + all_keys)
+        
         # 데이터프레임을 시트로 저장
-        df.to_excel(writer, sheet_name=f'Alt={height}(SurfaceBurst)', index=False)
+        df.to_excel(writer, sheet_name=f'Alt={height}(Airbust)', index=False, float_format='%.8f')
 
 
 
-# save the data to csv
-for height, data in data_by_height.items():
-    # CSV 파일명 설정
-    filename = f"data_height_{height}.csv"
-    with open(filename, mode='w', newline='') as file:
-        writer = csv.writer(file)
-        # 헤더 작성
-        writer.writerow(['kt', 'Crater Inside', 'Crater Lip', 'Air Blast 3000psi', 'Air Blast 200psi', 'Fireball', 'Heavy Blast 20psi', 'Radiation 5000rem', 'Radiation 1000rem', 'Radiation 600rem', 'Radiation 500rem', 'Radiation 100rem', 'Moderate Blast 5psi', 'Thermal Radiation 35cal/cm^2', 'Thermal Radiation 3rd degree burns', 'Thermal Radiation 3rd degree burns(50%)', 'Light Blast 1psi', 'Thermal Radiation 2nd degree burns', 'Thermal Radiation 1st degree burns(50%)', 'Thermal Radiation no harm'])
-        # 데이터 쓰기
-        for kt, radius_values in data:
-            writer.writerow([kt] + radius_values)
+# import pandas as pd
+
+# # Excel 파일 생성을 위한 writer 준비
+# with pd.ExcelWriter('output_data(air).xlsx', engine='openpyxl') as writer:
+#     for height, data in data_by_height.items():
+#         # 각 고도별로 데이터 처리 및 데이터프레임 생성
+#         processed_data = []
+#         for kt, radius_values in data:
+#             # 두 번째 원소가 None이면 제거
+#             if radius_values[1] is None:
+#                 del radius_values[1]
+#             # 데이터 길이가 19개가 아니면 조정 (예를 들어, 다른 위치에도 None 값이 있을 경우)
+#             if len(radius_values) > 19:
+#                 radius_values = radius_values[:19]
+#             processed_data.append([kt] + radius_values)
+        
+#         # 처리된 데이터로 DataFrame 생성
+#         df = pd.DataFrame(processed_data, columns=['kt'] + ['Crater Inside', 'Crater Lip', 'Air Blast 3000psi', 'Air Blast 200psi', 'Fireball', 'Heavy Blast 20psi', 'Radiation 5000rem', 'Radiation 1000rem', 'Radiation 600rem', 'Radiation 500rem', 'Radiation 100rem', 'Moderate Blast 5psi', 'Thermal Radiation 35cal/cm^2', 'Thermal Radiation 3rd degree burns', 'Thermal Radiation 3rd degree burns(50%)', 'Light Blast 1psi', 'Thermal Radiation 2nd degree burns', 'Thermal Radiation 1st degree burns(50%)', 'Thermal Radiation no harm'])
+#         # 데이터프레임을 시트로 저장
+#         df.to_excel(writer, sheet_name=f'Alt={height}(SurfaceBurst)', index=False)
+
+
+
+# # save the data to csv
+# for height, data in data_by_height.items():
+#     # CSV 파일명 설정
+#     filename = f"data_height_{height}.csv"
+#     with open(filename, mode='w', newline='') as file:
+#         writer = csv.writer(file)
+#         # 헤더 작성
+#         writer.writerow(['kt', 'Crater Inside', 'Crater Lip', 'Air Blast 3000psi', 'Air Blast 200psi', 'Fireball', 'Heavy Blast 20psi', 'Radiation 5000rem', 'Radiation 1000rem', 'Radiation 600rem', 'Radiation 500rem', 'Radiation 100rem', 'Moderate Blast 5psi', 'Thermal Radiation 35cal/cm^2', 'Thermal Radiation 3rd degree burns', 'Thermal Radiation 3rd degree burns(50%)', 'Light Blast 1psi', 'Thermal Radiation 2nd degree burns', 'Thermal Radiation 1st degree burns(50%)', 'Thermal Radiation no harm'])
+#         # 데이터 쓰기
+#         for kt, radius_values in data:
+#             writer.writerow([kt] + radius_values)
         
